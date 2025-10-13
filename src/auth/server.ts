@@ -4,7 +4,7 @@ import http from 'http';
 import { URL } from 'url';
 import open from 'open';
 import { loadCredentials } from './client.js';
-import { getAccountMode } from './utils.js';
+import { getAccountMode, getOAuthCallbackHost, getOAuthCallbackPort, validateOAuthCallbackConfig, detectConfigTypos } from './utils.js';
 
 export class AuthServer {
   private baseOAuth2Client: OAuth2Client; // Used by TokenManager for validation/refresh
@@ -18,7 +18,17 @@ export class AuthServer {
   constructor(oauth2Client: OAuth2Client) {
     this.baseOAuth2Client = oauth2Client;
     this.tokenManager = new TokenManager(oauth2Client);
-    this.portRange = { start: 3500, end: 3505 };
+
+    // Detect configuration typos early
+    detectConfigTypos();
+
+    // Use configured port or default range
+    const configuredPort = getOAuthCallbackPort();
+    if (configuredPort) {
+      this.portRange = { start: configuredPort, end: configuredPort };
+    } else {
+      this.portRange = { start: 3500, end: 3505 };
+    }
   }
 
   private createServer(): http.Server {
@@ -174,11 +184,17 @@ export class AuthServer {
     // Successfully started server on `port`. Now create the flow-specific OAuth client.
     try {
       const { client_id, client_secret } = await loadCredentials();
+      const callbackHost = getOAuthCallbackHost();
+      const callbackUrl = `http://${callbackHost}:${port}/oauth2callback`;
+
       this.flowOAuth2Client = new OAuth2Client(
         client_id,
         client_secret,
-        `http://localhost:${port}/oauth2callback`
+        callbackUrl
       );
+
+      // Show configuration and setup instructions
+      validateOAuthCallbackConfig(port);
     } catch (error) {
         // Could not load credentials, cannot proceed with auth flow
         this.authCompletedSuccessfully = false;
@@ -192,10 +208,12 @@ export class AuthServer {
       scope: ['https://www.googleapis.com/auth/calendar'],
       prompt: 'consent'
     });
-    
+
+    const callbackHost = getOAuthCallbackHost();
+
     // Always show the URL in console for easy access
     process.stderr.write(`\n🔗 Authentication URL: ${authorizeUrl}\n\n`);
-    process.stderr.write(`Or visit: http://localhost:${port}\n\n`);
+    process.stderr.write(`Or visit: http://${callbackHost}:${port}\n\n`);
     
     if (openBrowser) {
       try {
@@ -212,6 +230,8 @@ export class AuthServer {
   }
 
   private async startServerOnAvailablePort(): Promise<number | null> {
+    const configuredPort = getOAuthCallbackPort();
+
     for (let port = this.portRange.start; port <= this.portRange.end; port++) {
       try {
         await new Promise<void>((resolve, reject) => {
@@ -223,7 +243,7 @@ export class AuthServer {
           testServer.on('error', (err: NodeJS.ErrnoException) => {
             if (err.code === 'EADDRINUSE') {
               // Port is in use, close the test server and reject
-              testServer.close(() => reject(err)); 
+              testServer.close(() => reject(err));
             } else {
               // Other error, reject
               reject(err);
@@ -237,6 +257,16 @@ export class AuthServer {
             // An unexpected error occurred during server start
             return null;
         }
+
+        // If specific port was requested and it's in use, fail immediately
+        if (configuredPort) {
+          process.stderr.write(`\n❌ Error: Configured port ${configuredPort} is already in use.\n`);
+          process.stderr.write(`   Either:\n`);
+          process.stderr.write(`   - Stop the process using port ${configuredPort}, or\n`);
+          process.stderr.write(`   - Choose a different port with OAUTH_CALLBACK_PORT\n\n`);
+          return null;
+        }
+        // Otherwise continue trying ports in range
         // EADDRINUSE occurred, loop continues
       }
     }

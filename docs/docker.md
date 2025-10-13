@@ -31,6 +31,73 @@ docker compose exec calendar-mcp npm run auth
 # 5. Add to Claude Desktop config (see stdio Mode section below)
 ```
 
+## Remote Host Authentication
+
+If you're running the server on a remote host (e.g., Docker on a remote server), you have two options for OAuth authentication:
+
+### Option 1: SSH Tunneling (Recommended)
+
+**No firewall changes or Google Console configuration needed**
+
+```bash
+# On your local machine, create SSH tunnel to remote server
+ssh -L 3500:localhost:3500 user@remote-server
+
+# In another terminal, trigger authentication
+docker compose exec calendar-mcp npm run auth
+
+# Visit the localhost URL shown - traffic tunnels through SSH
+# Complete authentication in your browser
+```
+
+**Why SSH tunneling?**
+- No firewall/NAT configuration required
+- No changes to Google Cloud Console redirect URIs
+- Encrypted connection
+- Works with existing localhost-only OAuth credentials
+
+### Option 2: Direct IP Access
+
+**Requires firewall configuration and Google Console setup**
+
+```bash
+# 1. Configure remote host IP
+echo "OAUTH_CALLBACK_HOST=192.168.1.100" >> .env
+echo "OAUTH_CALLBACK_PORT=3500" >> .env
+
+# 2. Ensure port 3500 is accessible from your local machine
+# Test: curl http://192.168.1.100:3500
+
+# 3. Add redirect URI to Google Cloud Console
+# Visit: https://console.cloud.google.com/apis/credentials
+# Add: http://192.168.1.100:3500/oauth2callback to "Authorized redirect URIs"
+
+# 4. Run authentication
+docker compose exec calendar-mcp npm run auth
+# Follow the setup instructions shown
+```
+
+**Important**: The `OAUTH_CALLBACK_PORT` must match the **host port** in docker-compose.yml:
+
+```yaml
+ports:
+  - "3500:3500"  # ✅ Host:Container - use OAUTH_CALLBACK_PORT=3500
+  - "8500:3500"  # ⚠️  If using this, set OAUTH_CALLBACK_PORT=8500
+```
+
+### Troubleshooting Remote Authentication
+
+**"redirect_uri_mismatch" error**
+→ The redirect URI isn't whitelisted in Google Cloud Console. Run `npm run auth` which will show you the exact URI to add.
+
+**"Connection refused" during callback**
+→ Port isn't accessible from your local machine. Test with `curl http://YOUR_IP:3500`. Consider using SSH tunneling instead.
+
+**"Port already in use"**
+→ Another process is using the port. Change `OAUTH_CALLBACK_PORT` or stop the conflicting process.
+
+---
+
 ## Two Modes
 
 The server supports two transport modes: **stdio** (for local Claude Desktop) and **HTTP** (for remote/web access).

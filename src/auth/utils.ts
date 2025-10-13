@@ -128,3 +128,78 @@ To get OAuth credentials:
 5. Download the credentials file as gcp-oauth.keys.json
 `.trim();
 }
+
+// Get OAuth callback host from environment or default to localhost
+export function getOAuthCallbackHost(): string {
+  return process.env.OAUTH_CALLBACK_HOST || 'localhost';
+}
+
+// Get OAuth callback port from environment or return undefined for auto-detection
+export function getOAuthCallbackPort(): number | undefined {
+  const port = process.env.OAUTH_CALLBACK_PORT;
+  if (port && port.trim() !== '') {
+    // Validate that the string is purely numeric before parsing
+    if (!/^\d+$/.test(port.trim())) {
+      throw new Error(`Invalid OAUTH_CALLBACK_PORT: ${port}. Must be between 1 and 65535.`);
+    }
+    const parsed = parseInt(port, 10);
+    if (parsed < 1 || parsed > 65535) {
+      throw new Error(`Invalid OAUTH_CALLBACK_PORT: ${port}. Must be between 1 and 65535.`);
+    }
+    return parsed;
+  }
+  return undefined; // Use default port range
+}
+
+// Validate and provide setup instructions for remote OAuth
+export function validateOAuthCallbackConfig(actualPort: number): void {
+  const host = getOAuthCallbackHost();
+  const configuredPort = getOAuthCallbackPort();
+
+  // Log configuration source
+  const portSource = configuredPort ? 'OAUTH_CALLBACK_PORT env var' : 'auto-detected';
+  process.stderr.write(`\n📋 OAuth Configuration:\n`);
+  process.stderr.write(`   Host: ${host} ${host === 'localhost' ? '(default)' : '(OAUTH_CALLBACK_HOST)'}\n`);
+  process.stderr.write(`   Port: ${actualPort} (${portSource})\n`);
+
+  // For remote hosts, show required Google Console setup
+  if (host !== 'localhost' && host !== '127.0.0.1') {
+    const callbackUrl = `http://${host}:${actualPort}/oauth2callback`;
+    process.stderr.write(`\n⚠️  REMOTE HOST DETECTED - SETUP REQUIRED:\n`);
+    process.stderr.write(`\n`);
+    process.stderr.write(`   Before authenticating, add this redirect URI to Google Cloud Console:\n`);
+    process.stderr.write(`   \n`);
+    process.stderr.write(`   ${callbackUrl}\n`);
+    process.stderr.write(`   \n`);
+    process.stderr.write(`   Steps:\n`);
+    process.stderr.write(`   1. Visit: https://console.cloud.google.com/apis/credentials\n`);
+    process.stderr.write(`   2. Select your OAuth 2.0 Client ID\n`);
+    process.stderr.write(`   3. Add the URI above to "Authorized redirect URIs"\n`);
+    process.stderr.write(`   4. Save and return here to continue\n`);
+    process.stderr.write(`\n`);
+    process.stderr.write(`   If you haven't configured your firewall:\n`);
+    process.stderr.write(`   - Ensure port ${actualPort} is accessible from your local machine\n`);
+    process.stderr.write(`   - Test with: curl http://${host}:${actualPort}\n`);
+    process.stderr.write(`\n`);
+    process.stderr.write(`   Alternative: Use SSH tunneling to avoid firewall configuration:\n`);
+    process.stderr.write(`   - Run: ssh -L ${actualPort}:localhost:${actualPort} user@${host}\n`);
+    process.stderr.write(`   - Then use OAUTH_CALLBACK_HOST=localhost\n`);
+    process.stderr.write(`\n`);
+  }
+}
+
+// Detect common typos in environment variables
+export function detectConfigTypos(): void {
+  const possibleTypos = [
+    'OAUTH_CALLBAK_HOST',
+    'OAUTH_CALLBACK_HST',
+    'OAUTH_CALLBAK_PORT',
+    'OAUTH_CALLBACK_PRT',
+  ];
+
+  for (const typo of possibleTypos) {
+    if (process.env[typo]) {
+      process.stderr.write(`⚠️  Warning: Found '${typo}' in environment. Did you mean '${typo.replace('CALLBAK', 'CALLBACK').replace('HST', 'HOST').replace('PRT', 'PORT')}'?\n`);
+    }
+  }
+}
