@@ -1,0 +1,9 @@
+# Heroku Container Deployment Configuration
+# This file tells Heroku how to build and run the Docker container
+
+build:
+  docker:
+    web: Dockerfile
+
+run:
+  web: node build/index.js --transport http --host 0.0.0.0

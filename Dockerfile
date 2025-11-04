@@ -1,5 +1,9 @@
 # Google Calendar MCP Server - Optimized Dockerfile
 # syntax=docker/dockerfile:1
+#
+# Supports both local and Heroku deployment
+# For Heroku: Set CONVEX_MODE=true, TRANSPORT=http
+# Heroku automatically sets PORT environment variable
 
 FROM node:18-alpine
 
@@ -28,6 +32,7 @@ RUN npm run build
 RUN npm prune --production --silent
 
 # Create config directory and set permissions
+# Note: In Convex mode, tokens are managed in memory, not stored on disk
 RUN mkdir -p /home/nodejs/.config/google-calendar-mcp && \
     chown -R nodejs:nodejs /home/nodejs/.config && \
     chown -R nodejs:nodejs /app
@@ -35,8 +40,15 @@ RUN mkdir -p /home/nodejs/.config/google-calendar-mcp && \
 # Switch to non-root user
 USER nodejs
 
-# Expose port for HTTP mode (optional)
-EXPOSE 3000
+# Expose port for HTTP mode
+# Heroku will dynamically assign PORT at runtime
+EXPOSE ${PORT:-3000}
 
-# Default command - run directly to avoid npm output
-CMD ["node", "build/index.js"]
+# Environment defaults (can be overridden at runtime)
+ENV TRANSPORT=http
+ENV HOST=0.0.0.0
+ENV NODE_ENV=production
+
+# Default command - run with HTTP transport
+# For Heroku, PORT is automatically set by the platform
+CMD ["node", "build/index.js", "--transport", "http", "--host", "0.0.0.0"]

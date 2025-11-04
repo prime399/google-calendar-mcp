@@ -1,6 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import http from "http";
+import { getConvexConfig } from "../config/ConvexConfig.js";
+import { handleTokenEndpoints } from "../api/tokenEndpoints.js";
+import { handleManagementEndpoints } from "../api/managementEndpoints.js";
+import { corsMiddleware, securityHeaders, composeMiddleware } from "../middleware/auth.js";
 
 export interface HttpTransportConfig {
   port?: number;
@@ -29,22 +33,29 @@ export class HttpTransportHandler {
 
     // Create HTTP server to handle the StreamableHTTP transport
     const httpServer = http.createServer(async (req, res) => {
-      // Validate Origin header to prevent DNS rebinding attacks (MCP spec requirement)
-      const origin = req.headers.origin;
-      const allowedOrigins = [
-        'http://localhost',
-        'http://127.0.0.1',
-        'https://localhost',
-        'https://127.0.0.1'
-      ];
+      // Apply security middleware
+      const middleware = composeMiddleware(
+        corsMiddleware(),
+        securityHeaders()
+      );
 
-      // For requests with Origin header, validate it
-      if (origin && !allowedOrigins.some(allowed => origin.startsWith(allowed))) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Forbidden: Invalid origin',
-          message: 'Origin header validation failed'
-        }));
+      // Run middleware
+      let middlewareComplete = false;
+      await new Promise<void>((resolve) => {
+        middleware(req, res, () => {
+          middlewareComplete = true;
+          resolve();
+        });
+        // If response was sent by middleware, resolve
+        res.on('finish', () => {
+          if (!middlewareComplete) {
+            resolve();
+          }
+        });
+      });
+
+      // If middleware sent response (e.g., CORS preflight), stop here
+      if (res.headersSent) {
         return;
       }
 
@@ -60,14 +71,15 @@ export class HttpTransportHandler {
         return;
       }
 
-      // Handle CORS
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
-      
-      if (req.method === 'OPTIONS') {
-        res.writeHead(200);
-        res.end();
+      // Try management endpoints first (health, metrics, etc.)
+      const handledByManagement = await handleManagementEndpoints(req, res);
+      if (handledByManagement) {
+        return;
+      }
+
+      // Try token endpoints (Convex integration)
+      const handledByTokens = await handleTokenEndpoints(req, res);
+      if (handledByTokens) {
         return;
       }
 
@@ -84,17 +96,7 @@ export class HttpTransportHandler {
         }
       }
 
-      // Handle health check endpoint
-      if (req.method === 'GET' && req.url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          status: 'healthy',
-          server: 'google-calendar-mcp',
-          timestamp: new Date().toISOString()
-        }));
-        return;
-      }
-
+      // Handle MCP protocol requests
       try {
         await transport.handleRequest(req, res);
       } catch (error) {

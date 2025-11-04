@@ -4,6 +4,8 @@ import { getSecureTokenPath, getAccountMode, getLegacyTokenPath } from './utils.
 import { GaxiosError } from 'gaxios';
 import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
+import { getConvexConfig } from '../config/ConvexConfig.js';
+import { getConvexTokenProvider } from './convexTokenProvider.js';
 
 // Interface for multi-account token storage
 interface MultiAccountTokens {
@@ -11,16 +13,41 @@ interface MultiAccountTokens {
   test?: Credentials;
 }
 
+export type TokenStorageMode = 'file' | 'convex';
+
 export class TokenManager {
   private oauth2Client: OAuth2Client;
   private tokenPath: string;
   private accountMode: 'normal' | 'test';
+  private storageMode: TokenStorageMode;
 
-  constructor(oauth2Client: OAuth2Client) {
+  constructor(oauth2Client: OAuth2Client, storageMode?: TokenStorageMode) {
     this.oauth2Client = oauth2Client;
     this.tokenPath = getSecureTokenPath();
     this.accountMode = getAccountMode();
-    this.setupTokenRefresh();
+
+    // Determine storage mode: convex if CONVEX_MODE=true, otherwise file
+    if (storageMode) {
+      this.storageMode = storageMode;
+    } else {
+      const config = getConvexConfig();
+      this.storageMode = config.isEnabled() ? 'convex' : 'file';
+    }
+
+    // Only setup token refresh for file mode
+    if (this.storageMode === 'file') {
+      this.setupTokenRefresh();
+    }
+  }
+
+  // Method to get storage mode
+  public getStorageMode(): TokenStorageMode {
+    return this.storageMode;
+  }
+
+  // Method to check if using Convex mode
+  public isConvexMode(): boolean {
+    return this.storageMode === 'convex';
   }
 
   // Method to expose the token path
@@ -170,12 +197,19 @@ export class TokenManager {
   }
 
   async loadSavedTokens(): Promise<boolean> {
+    // In Convex mode, tokens are not loaded from file system
+    // They are injected via API and managed by ConvexTokenProvider
+    if (this.storageMode === 'convex') {
+      process.stderr.write('Convex mode: Tokens managed via API injection, not loaded from file\n');
+      return true; // Return true to indicate no error
+    }
+
     try {
       await this.ensureTokenDirectoryExists();
-      
+
       // Check if current token file exists
       const tokenExists = await fs.access(this.tokenPath).then(() => true).catch(() => false);
-      
+
       // If no current tokens, try to migrate from legacy location
       if (!tokenExists) {
         const migrated = await this.migrateLegacyTokens();
@@ -198,11 +232,11 @@ export class TokenManager {
       return true;
     } catch (error: unknown) {
       process.stderr.write(`Error loading tokens for ${this.accountMode} account: `);
-      if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') { 
-          try { 
-              await fs.unlink(this.tokenPath); 
-              process.stderr.write("Removed potentially corrupted token file\n"); 
-            } catch (unlinkErr) { /* ignore */ } 
+      if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') {
+          try {
+              await fs.unlink(this.tokenPath);
+              process.stderr.write("Removed potentially corrupted token file\n");
+            } catch (unlinkErr) { /* ignore */ }
       }
       return false;
     }
@@ -257,18 +291,24 @@ export class TokenManager {
   }
 
   async validateTokens(accountMode?: 'normal' | 'test'): Promise<boolean> {
+    // In Convex mode, tokens are validated via API injection
+    // We don't validate here since tokens are per-user and injected per-request
+    if (this.storageMode === 'convex') {
+      return true; // Always return true in Convex mode
+    }
+
     // For unit tests that don't need real authentication, they should mock at the handler level
     // Integration tests always need real tokens
 
     const modeToValidate = accountMode || this.accountMode;
     const currentMode = this.accountMode;
-    
+
     try {
       // Temporarily switch to the mode we want to validate if different
       if (modeToValidate !== currentMode) {
         this.accountMode = modeToValidate;
       }
-      
+
       if (!this.oauth2Client.credentials || !this.oauth2Client.credentials.access_token) {
           // Try loading first if no credentials set
           if (!(await this.loadSavedTokens())) {
@@ -279,7 +319,7 @@ export class TokenManager {
               return false; // Still no token after loading
           }
       }
-      
+
       const result = await this.refreshTokensIfNeeded();
       return result;
     } finally {
@@ -291,10 +331,16 @@ export class TokenManager {
   }
 
   async saveTokens(tokens: Credentials): Promise<void> {
+    // In Convex mode, tokens are managed by ConvexTokenProvider, not saved to file
+    if (this.storageMode === 'convex') {
+      process.stderr.write('Convex mode: Tokens managed via API, not saved to file\n');
+      return;
+    }
+
     try {
         const multiAccountTokens = await this.loadMultiAccountTokens();
         multiAccountTokens[this.accountMode] = tokens;
-        
+
         await this.saveMultiAccountTokens(multiAccountTokens);
         this.oauth2Client.setCredentials(tokens);
         process.stderr.write(`Tokens saved successfully for ${this.accountMode} account to: ${this.tokenPath}\n`);

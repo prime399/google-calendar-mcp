@@ -8,3 +8,6 @@ coverage/
 coverage/
 settings.local.json
 .env
+
+#
+CONVEX_INTEGRATION_PLAN.md

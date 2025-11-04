@@ -3,7 +3,7 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 
 // Import authentication components
-import { initializeOAuth2Client } from './auth/client.js';
+import { initializeOAuth2Client, getOAuth2ClientForUser, initializeOAuth2ClientForConvex } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
 import { TokenManager } from './auth/tokenManager.js';
 
@@ -16,6 +16,7 @@ import { HttpTransportHandler, HttpTransportConfig } from './transports/http.js'
 
 // Import config
 import { ServerConfig } from './config/TransportConfig.js';
+import { getConvexConfig } from './config/ConvexConfig.js';
 
 export class GoogleCalendarMcpServer {
   private server: McpServer;
@@ -23,6 +24,7 @@ export class GoogleCalendarMcpServer {
   private tokenManager!: TokenManager;
   private authServer!: AuthServer;
   private config: ServerConfig;
+  private convexMode: boolean;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -30,21 +32,40 @@ export class GoogleCalendarMcpServer {
       name: "google-calendar",
       version: "1.3.0"
     });
+
+    // Check if Convex mode is enabled
+    const convexConfig = getConvexConfig();
+    this.convexMode = convexConfig.isEnabled();
   }
 
   async initialize(): Promise<void> {
-    // 1. Initialize Authentication (but don't block on it)
-    this.oauth2Client = await initializeOAuth2Client();
-    this.tokenManager = new TokenManager(this.oauth2Client);
-    this.authServer = new AuthServer(this.oauth2Client);
+    if (this.convexMode) {
+      // Convex mode initialization
+      process.stderr.write('🔄 Initializing in Convex integration mode...\n');
 
-    // 2. Handle startup authentication based on transport type
-    await this.handleStartupAuthentication();
+      // Load OAuth credentials (but don't create shared OAuth2Client)
+      await initializeOAuth2ClientForConvex();
 
-    // 3. Set up Modern Tool Definitions
+      // Create a placeholder OAuth2Client for TokenManager
+      // (required for compatibility, but not used in Convex mode)
+      this.oauth2Client = new OAuth2Client();
+      this.tokenManager = new TokenManager(this.oauth2Client, 'convex');
+
+      process.stderr.write('✅ Convex mode initialized. Tokens will be injected via API.\n');
+    } else {
+      // Standard file-based mode initialization
+      this.oauth2Client = await initializeOAuth2Client();
+      this.tokenManager = new TokenManager(this.oauth2Client, 'file');
+      this.authServer = new AuthServer(this.oauth2Client);
+
+      // Handle startup authentication for file-based mode
+      await this.handleStartupAuthentication();
+    }
+
+    // Set up Modern Tool Definitions
     this.registerTools();
 
-    // 4. Set up Graceful Shutdown
+    // Set up Graceful Shutdown
     this.setupGracefulShutdown();
   }
 
@@ -122,9 +143,36 @@ export class GoogleCalendarMcpServer {
   }
 
   private async executeWithHandler(handler: any, args: any): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-    await this.ensureAuthenticated();
-    const result = await handler.runTool(args, this.oauth2Client);
-    return result;
+    if (this.convexMode) {
+      // In Convex mode, extract userId from arguments
+      const userId = args.userId || args.user_id;
+
+      if (!userId) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "userId is required in Convex mode. Please include userId in tool arguments."
+        );
+      }
+
+      // Get user-specific OAuth2Client
+      const userOAuth2Client = await getOAuth2ClientForUser(userId);
+
+      if (!userOAuth2Client) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `No valid tokens found for user: ${userId}. Please inject tokens via POST /api/tokens endpoint.`
+        );
+      }
+
+      // Execute handler with user-specific client
+      const result = await handler.runTool(args, userOAuth2Client);
+      return result;
+    } else {
+      // File-based mode: use shared OAuth2Client
+      await this.ensureAuthenticated();
+      const result = await handler.runTool(args, this.oauth2Client);
+      return result;
+    }
   }
 
   async start(): Promise<void> {

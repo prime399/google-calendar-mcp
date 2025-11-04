@@ -1,0 +1,98 @@
+{
+  "name": "Google Calendar MCP Server (Convex Integration)",
+  "description": "Google Calendar MCP Server with Convex-based authentication for multi-tenant deployment",
+  "repository": "https://github.com/nspady/google-calendar-mcp",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "google-calendar",
+    "calendar",
+    "convex",
+    "heroku",
+    "ai",
+    "llm"
+  ],
+  "stack": "container",
+  "env": {
+    "CONVEX_MODE": {
+      "description": "Enable Convex integration mode (set to 'true' for study-flow integration)",
+      "value": "true",
+      "required": true
+    },
+    "MCP_API_KEY": {
+      "description": "API key for authenticating token injection and management requests (generate a secure random string, min 32 characters)",
+      "generator": "secret",
+      "required": true
+    },
+    "GOOGLE_CLIENT_ID": {
+      "description": "Google OAuth 2.0 Client ID from Google Cloud Console",
+      "required": true
+    },
+    "GOOGLE_CLIENT_SECRET": {
+      "description": "Google OAuth 2.0 Client Secret from Google Cloud Console",
+      "required": true
+    },
+    "ALLOWED_ORIGINS": {
+      "description": "Comma-separated list of allowed CORS origins (e.g., https://your-study-flow-app.vercel.app)",
+      "required": true
+    },
+    "TRANSPORT": {
+      "description": "Transport mode (http for Heroku deployment)",
+      "value": "http",
+      "required": false
+    },
+    "HOST": {
+      "description": "Host to bind to (0.0.0.0 for Heroku)",
+      "value": "0.0.0.0",
+      "required": false
+    },
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production",
+      "required": false
+    },
+    "RATE_LIMIT_REQUESTS_PER_USER": {
+      "description": "Maximum calendar API requests per user per window (default: 100)",
+      "value": "100",
+      "required": false
+    },
+    "RATE_LIMIT_TOKEN_INJECTIONS_PER_IP": {
+      "description": "Maximum token injections per IP per window (default: 10)",
+      "value": "10",
+      "required": false
+    },
+    "RATE_LIMIT_WINDOW_MS": {
+      "description": "Rate limit time window in milliseconds (default: 15 minutes)",
+      "value": "900000",
+      "required": false
+    },
+    "TOKEN_MIN_EXPIRY_BUFFER_MS": {
+      "description": "Minimum token expiry buffer in milliseconds (default: 5 minutes)",
+      "value": "300000",
+      "required": false
+    },
+    "TOKEN_EXPIRY_WARNING_MS": {
+      "description": "Warn if token expires within this time in milliseconds (default: 10 minutes)",
+      "value": "600000",
+      "required": false
+    },
+    "CLEANUP_INTERVAL_MS": {
+      "description": "Token cleanup interval in milliseconds (default: 30 minutes)",
+      "value": "1800000",
+      "required": false
+    },
+    "CLEANUP_STALE_THRESHOLD_MS": {
+      "description": "Remove tokens not accessed in this time in milliseconds (default: 24 hours)",
+      "value": "86400000",
+      "required": false
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "buildpacks": [],
+  "addons": []
+}
