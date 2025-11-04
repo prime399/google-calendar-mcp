@@ -11,9 +11,11 @@ export interface ServerConfig {
 
 export function parseArgs(args: string[]): ServerConfig {
   // Start with environment variables as base config
+  // Prioritize TRANSPORT_MODE over TRANSPORT (for Heroku-style deployment)
+  const transportType = (process.env.TRANSPORT_MODE || process.env.TRANSPORT) as 'stdio' | 'http' | undefined;
   const config: ServerConfig = {
     transport: {
-      type: (process.env.TRANSPORT as 'stdio' | 'http') || 'stdio',
+      type: transportType || 'stdio',
       port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
       host: process.env.HOST || '127.0.0.1'
     },
@@ -53,7 +55,8 @@ Options:
   --help                   Show this help message
 
 Environment Variables:
-  TRANSPORT               Transport type: stdio | http
+  TRANSPORT_MODE         Transport type: stdio | http (preferred for Heroku)
+  TRANSPORT              Transport type: stdio | http (fallback, deprecated)
   PORT                   Port for HTTP transport
   HOST                   Host for HTTP transport
   DEBUG                  Enable debug logging (true/false)

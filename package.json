@@ -32,6 +32,10 @@
   "homepage": "https://github.com/nspady/google-calendar-mcp#readme",
   "author": "nspady",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "scripts": {
     "start": "node build/index.js",
     "build": "node scripts/build.js",

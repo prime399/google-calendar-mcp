@@ -1,6 +1,6 @@
 {
   "name": "Google Calendar MCP Server (Convex Integration)",
-  "description": "Google Calendar MCP Server with Convex-based authentication for multi-tenant deployment",
+  "description": "Google Calendar MCP Server with Convex-based authentication for multi-tenant deployment. Uses Node.js buildpack with Procfile for flexible deployment.",
   "repository": "https://github.com/nspady/google-calendar-mcp",
   "keywords": [
     "mcp",
@@ -12,7 +12,7 @@
     "ai",
     "llm"
   ],
-  "stack": "container",
+  "stack": "heroku-22",
   "env": {
     "CONVEX_MODE": {
       "description": "Enable Convex integration mode (set to 'true' for study-flow integration)",
@@ -37,7 +37,12 @@
       "required": true
     },
     "TRANSPORT": {
-      "description": "Transport mode (http for Heroku deployment)",
+      "description": "Transport mode (http for Heroku deployment) - DEPRECATED: Use TRANSPORT_MODE instead",
+      "value": "http",
+      "required": false
+    },
+    "TRANSPORT_MODE": {
+      "description": "Dynamic transport selection: 'http' for web process (agent access), 'stdio' for mcp process (one-off dynos)",
       "value": "http",
       "required": false
     },
@@ -89,10 +94,14 @@
   },
   "formation": {
     "web": {
-      "quantity": 1,
+      "quantity": 0,
       "size": "basic"
     }
   },
-  "buildpacks": [],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
   "addons": []
 }

@@ -82,6 +82,51 @@ docker compose up
 
 See the [Docker deployment guide](docs/docker.md) for detailed configuration options including HTTP transport mode.
 
+**Option 4: Heroku Deployment**
+
+This server can be deployed to Heroku using the Node.js buildpack with support for both HTTP (agent access) and STDIO (one-off dyno) modes.
+
+**Deploy to Heroku:**
+```bash
+# Clone and navigate to the repository
+git clone https://github.com/nspady/google-calendar-mcp.git
+cd google-calendar-mcp
+
+# Create Heroku app
+heroku create your-app-name
+
+# Set required environment variables
+heroku config:set CONVEX_MODE=true
+heroku config:set GOOGLE_CLIENT_ID="your-client-id"
+heroku config:set GOOGLE_CLIENT_SECRET="your-client-secret"
+heroku config:set ALLOWED_ORIGINS="https://your-frontend-app.com"
+heroku config:set MCP_API_KEY="$(openssl rand -base64 32)"
+
+# Deploy
+git push heroku main
+```
+
+**Process Types:**
+- `web`: HTTP server for agent access (disabled by default, scale up when needed)
+- `mcp`: STDIO mode for one-off dynos
+
+**Using One-off Dynos (STDIO mode):**
+```bash
+heroku run mcp --app your-app-name
+```
+
+**Enable HTTP/Agent Access:**
+```bash
+# Scale up web process for persistent HTTP server
+heroku ps:scale web=1 --app your-app-name
+
+# Your server will be available at: https://your-app-name.herokuapp.com
+```
+
+**Note:** The default formation has `web=0` for cost savings. Scale to `web=1` only when you need HTTP/agent access.
+
+See the [Deployment Guide](docs/deployment.md) for more details.
+
 ### First Run
 
 1. Start Claude Desktop
@@ -171,6 +216,10 @@ Along with the normal capabilities you would expect for a calendar integration y
 **Environment Variables:**
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
+- `TRANSPORT_MODE` - Transport type: `stdio` | `http` (for Heroku/buildpack deployments)
+- `TRANSPORT` - Legacy transport type (deprecated, use `TRANSPORT_MODE` instead)
+- `PORT` - Port for HTTP transport (default: 3000, auto-set by Heroku)
+- `HOST` - Host for HTTP transport (default: 127.0.0.1)
 
 **Claude Desktop Config Location:**
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
