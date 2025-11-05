@@ -57,6 +57,13 @@ export class ConvexConfig {
   }
 
   /**
+   * Write operational logs to stderr so MCP JSON-RPC traffic on stdout stays clean
+   */
+  private log(message: string): void {
+    console.error(message);
+  }
+
+  /**
    * Load configuration from environment variables
    */
   private loadFromEnvironment(): ConvexConfigOptions {
@@ -164,9 +171,15 @@ export class ConvexConfig {
     }
 
     // Log configuration summary
-    console.log('[ConvexConfig] Convex integration mode enabled');
-    console.log(`[ConvexConfig] Allowed origins: ${this.config.allowedOrigins.join(', ')}`);
-    console.log(`[ConvexConfig] Rate limit: ${this.config.rateLimit.maxRequestsPerUser} requests per user per ${this.config.rateLimit.windowMs}ms`);
+    this.log('[ConvexConfig] Convex integration mode enabled');
+    this.log(
+      `[ConvexConfig] Allowed origins: ${
+        this.config.allowedOrigins.length > 0 ? this.config.allowedOrigins.join(', ') : '(none)'
+      }`
+    );
+    this.log(
+      `[ConvexConfig] Rate limit: ${this.config.rateLimit.maxRequestsPerUser} requests per user per ${this.config.rateLimit.windowMs}ms`
+    );
   }
 
   /**
