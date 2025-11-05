@@ -154,6 +154,9 @@ export class GoogleCalendarMcpServer {
         );
       }
 
+      // Remove userId from args before passing to handler (tools don't expect this parameter)
+      const { userId: _userId, user_id: _user_id, ...cleanArgs } = args;
+
       // Get user-specific OAuth2Client
       const userOAuth2Client = await getOAuth2ClientForUser(userId);
 
@@ -164,8 +167,8 @@ export class GoogleCalendarMcpServer {
         );
       }
 
-      // Execute handler with user-specific client
-      const result = await handler.runTool(args, userOAuth2Client);
+      // Execute handler with user-specific client and cleaned args (without userId)
+      const result = await handler.runTool(cleanArgs, userOAuth2Client);
       return result;
     } else {
       // File-based mode: use shared OAuth2Client
