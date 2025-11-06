@@ -1,5 +1,7 @@
+# web: Direct HTTP access to the MCP server for custom integrations (optional)
 web: node build/index.js --transport http --host 0.0.0.0 --port ${PORT:-3000}
-# mcp: node build/index.js --transport stdio
-# NOTE: mcp process type disabled to force Heroku Agents to use HTTP transport
-# In Convex mode, tokens are injected to the web dyno's memory and cannot be
-# shared with stdio processes. HTTP mode is required for multi-tenant operation.
+
+# google-calendar-mcp: MCP tool discovery process for Heroku Agents API
+# This process type name enables automatic tool registration with /v1/mcp/servers
+# Uses HTTP transport to support multi-tenant token injection (tokens stored in-memory)
+google-calendar-mcp: node build/index.js --transport http --host 0.0.0.0 --port ${PORT:-3000}
