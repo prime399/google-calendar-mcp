@@ -94,10 +94,6 @@
   },
   "formation": {
     "web": {
-      "quantity": 0,
-      "size": "basic"
-    },
-    "google-calendar-mcp": {
       "quantity": 1,
       "size": "basic"
     }
