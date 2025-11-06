@@ -62,9 +62,12 @@ const sharedExtendedPropertySchema = z
 
 // Define all tool schemas with TypeScript inference
 export const ToolSchemas = {
-  'list-calendars': z.object({}),
+  'list-calendars': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode")
+  }),
 
   'list-events': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode"),
     calendarId: z.union([
       z.string().describe(
         "Calendar identifier(s) to query. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Single calendar: 'primary'. Multiple calendars: array ['Work', 'Personal'] or JSON string '[\"Work\", \"Personal\"]'"
@@ -87,6 +90,7 @@ export const ToolSchemas = {
   }),
   
   'search-events': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode"),
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     query: z.string().describe(
       "Free text search query (searches summary, description, location, attendees, etc.)"
@@ -126,6 +130,7 @@ export const ToolSchemas = {
   }),
   
   'get-event': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode"),
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to retrieve"),
     fields: z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
@@ -133,9 +138,12 @@ export const ToolSchemas = {
     )
   }),
 
-  'list-colors': z.object({}),
+  'list-colors': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode")
+  }),
   
   'create-event': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode"),
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().optional().describe("Optional custom event ID (5-1024 characters, base32hex encoding: lowercase letters a-v and digits 0-9 only). If not provided, Google Calendar will generate one."),
     summary: z.string().describe("Title of the event"),
@@ -249,6 +257,7 @@ export const ToolSchemas = {
   }),
   
   'update-event': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode"),
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to update"),
     summary: z.string().optional().describe("Updated title of the event"),
@@ -391,6 +400,7 @@ export const ToolSchemas = {
   ),
   
   'delete-event': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode"),
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to delete"),
     sendUpdates: z.enum(["all", "externalOnly", "none"]).default("all").describe(
@@ -399,6 +409,7 @@ export const ToolSchemas = {
   }),
   
   'get-freebusy': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode"),
     calendars: z.array(z.object({
       id: z.string().describe("ID of the calendar (use 'primary' for the main calendar)")
     })).describe(
@@ -428,6 +439,7 @@ export const ToolSchemas = {
   }),
   
   'get-current-time': z.object({
+    userId: z.string().optional().describe("User ID for Convex token mode"),
     timeZone: z.string().optional().describe(
       "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, uses the primary Google Calendar's default timezone."
     )
