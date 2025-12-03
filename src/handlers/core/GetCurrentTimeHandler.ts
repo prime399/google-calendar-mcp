@@ -17,37 +17,28 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         const requestedTimeZone = validArgs.timeZone;
         
         let timezone: string;
-
-        if (requestedTimeZone) {
-            // Validate the timezone
-            if (!this.isValidTimeZone(requestedTimeZone)) {
+        if (validArgs.timeZone) {
+            if (!this.isValidTimeZone(validArgs.timeZone)) {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
-                    `Invalid timezone: ${requestedTimeZone}. Use IANA timezone format like 'America/Los_Angeles' or 'UTC'.`
+                    `Invalid timezone: ${validArgs.timeZone}. Use IANA format (e.g. 'America/Los_Angeles').`
                 );
             }
-            timezone = requestedTimeZone;
+            timezone = validArgs.timeZone;
         } else {
-            // No timezone requested - fetch the primary calendar's timezone
-            // If fetching fails (e.g., auth/network), fall back to system timezone
             try {
                 timezone = await this.getCalendarTimezone(oauth2Client, 'primary');
-                // If we got UTC back, it might be a fallback, try to detect if it's actually the system timezone
                 if (timezone === 'UTC') {
-                    const systemTz = this.getSystemTimeZone();
-                    if (systemTz !== 'UTC') {
-                        // Likely failed to get calendar timezone
-                        timezone = systemTz;
-                    }
+                    const sys = this.getSystemTimeZone();
+                    if (sys !== 'UTC') timezone = sys;
                 }
-            } catch (error) {
-                // This shouldn't happen with current implementation, but handle it
+            } catch {
                 timezone = this.getSystemTimeZone();
             }
         }
 
         const response: GetCurrentTimeResponse = {
-            currentTime: now.toISOString(),
+            currentTime: this.formatISOInZone(now, timezone),   // <-- NEW
             timezone: timezone,
             offset: this.getTimezoneOffset(now, timezone),
             isDST: this.isDaylightSavingTime(now, timezone)
@@ -55,7 +46,48 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
 
         return createStructuredResponse(response);
     }
-    
+
+    /**
+     * Formats a Date object as an ISO 8601 string in a specific timezone with offset.
+     *
+     * This method uses Intl.DateTimeFormat to extract date/time components in the target
+     * timezone and constructs an ISO string with the timezone offset appended.
+     *
+     * @param date - The Date object to format
+     * @param timeZone - IANA timezone identifier (e.g., 'America/Los_Angeles', 'UTC')
+     * @returns ISO 8601 string with timezone offset (e.g., '2025-11-04T14:30:00.123-08:00' or '2025-11-04T14:30:00.123Z')
+     *
+     * @example
+     * formatISOInZone(new Date('2025-11-04T22:30:00.000Z'), 'America/Los_Angeles')
+     * // Returns: '2025-11-04T14:30:00.000-08:00'
+     *
+     * @example
+     * formatISOInZone(new Date('2025-11-04T14:30:00.000Z'), 'UTC')
+     * // Returns: '2025-11-04T14:30:00.000Z'
+     */
+    private formatISOInZone(date: Date, timeZone: string): string {
+        const parts = new Intl.DateTimeFormat('sv-SE', {
+            timeZone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+            fractionalSecondDigits: 3   // keep milliseconds
+        }).formatToParts(date);
+
+        const map = parts.reduce((acc, p) => {
+            acc[p.type] = p.value;
+            return acc;
+        }, {} as Record<string, string>);
+
+        const iso = `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}:${map.second}.${map.fractionalSecond || '000'}`;
+        const offset = this.getTimezoneOffset(date, timeZone);
+        return offset === 'Z' ? `${iso}Z` : `${iso}${offset}`;
+    }
+
     private getSystemTimeZone(): string {
         try {
             return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -72,30 +104,7 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
             return false;
         }
     }
-    
-    private formatDateInTimeZone(date: Date, timeZone: string): string {
-        const offset = this.getTimezoneOffset(date, timeZone);
-        // Remove milliseconds from ISO string for proper RFC3339 format
-        const isoString = date.toISOString().replace(/\.\d{3}Z$/, '');
-        return isoString + offset;
-    }
-    
-    private formatHumanReadable(date: Date, timeZone: string): string {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: timeZone,
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            timeZoneName: 'long'
-        });
-        
-        return formatter.format(date);
-    }
-    
+
     private getTimezoneOffset(_date: Date, timeZone: string): string {
         try {
             const offsetMinutes = this.getTimezoneOffsetMinutes(timeZone);
