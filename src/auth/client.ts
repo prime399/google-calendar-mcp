@@ -53,6 +53,13 @@ export async function initializeOAuth2Client(): Promise<OAuth2Client> {
 }
 
 export async function loadCredentials(): Promise<{ client_id: string; client_secret: string }> {
+  // Check environment variables first (for Heroku/Convex deployment)
+  const envClientId = process.env.GOOGLE_CLIENT_ID;
+  const envClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (envClientId && envClientSecret) {
+    return { client_id: envClientId, client_secret: envClientSecret };
+  }
+
   try {
     const credentials = await loadCredentialsWithFallback();
 
